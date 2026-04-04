@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#4B0082">
+<title>Party Rental Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --purple:#4B0082;
+  --purple-light:#6A1BA5;
+  --bg:#F5F5F7;
+  --card:#FFFFFF;
+  --border:#E5E5EA;
+  --text:#1C1C1E;
+  --text2:#8E8E93;
+  --red:#FF3B30;
+  --green:#34C759;
+  --blue:#007AFF;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);min-height:100vh;-webkit-tap-highlight-color:transparent}
+.app{max-width:500px;margin:0 auto;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;padding-bottom:80px}
+
+/* Header */
+.header{background:linear-gradient(135deg,var(--purple),var(--purple-light));color:#fff;padding:20px 16px 16px;position:sticky;top:0;z-index:10}
+.header h1{font-size:20px;font-weight:600}
+.header .sub{font-size:13px;opacity:.8;margin-top:2px}
+.header-row{display:flex;align-items:center;justify-content:space-between}
+.header-actions{display:flex;gap:8px}
+.header-btn{background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px}
+
+/* Tabs */
+.tabs{display:flex;background:#fff;position:sticky;top:68px;z-index:9;border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:12px 4px;font-size:13px;text-align:center;cursor:pointer;color:var(--text2);border-bottom:2.5px solid transparent;transition:all .15s;font-weight:500}
+.tab.active{color:var(--purple);border-bottom-color:var(--purple)}
+
+/* Content */
+.content{flex:1;padding:12px}
+.content[style*="display: none"],.content[style*="display:none"]{padding:0}
+
+/* Search */
+.search-bar{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.search-bar input{border:none;background:transparent;outline:none;font-size:15px;flex:1;color:var(--text)}
+.search-bar input::placeholder{color:var(--text2)}
+
+/* Filter chips */
+.filter-row{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.filter-chip{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text2);transition:all .15s}
+.filter-chip.active{background:var(--purple);color:#fff;border-color:var(--purple)}
+
+/* Cards */
+.date-group{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding:8px 4px 6px;margin-top:8px}
+.card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px;cursor:pointer;transition:all .15s;position:relative}
+.card:active{transform:scale(.985);background:#F8F8FA}
+.card.cancelled{background:#FFF5F5;border-color:#FFD4D4}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.card-name{font-size:15px;font-weight:600;color:var(--text)}
+.card-price{font-size:15px;font-weight:600;color:var(--purple)}
+.card-price.cancelled{color:var(--red);text-decoration:line-through}
+.card-meta{font-size:13px;color:var(--text2);margin-top:2px}
+.card-badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
+.badge.waterslide{background:#E8F4FD;color:#0A6DC2}
+.badge.balloon{background:#F0EEFF;color:#5847BE}
+.badge.tables{background:#E8F8E0;color:#2D7A0B}
+.badge.cancelled{background:#FFE5E5;color:#C62828}
+.badge.confirmed{background:#E0F8E8;color:#1B7A3D}
+
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat{background:#fff;border-radius:12px;padding:14px;border:1px solid var(--border)}
+.stat-label{font-size:12px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.stat-val{font-size:24px;font-weight:700;color:var(--text)}
+.stat-val.money{color:var(--purple)}
+
+/* Section label */
+.section-label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px;padding:0 4px}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;animation:slideUp .25s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:36px;height:4px;background:#D1D1D6;border-radius:2px;margin:0 auto 16px}
+.modal-name{font-size:20px;font-weight:700;margin-bottom:4px;color:var(--text)}
+.modal-row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #F2F2F7;font-size:14px}
+.modal-row:last-child{border-bottom:none}
+.modal-label{color:var(--text2);font-weight:500}
+.modal-val{font-weight:600;text-align:right;max-width:60%;color:var(--text)}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.btn{flex:1;padding:14px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:center}
+.btn-primary{background:var(--purple);color:#fff}
+.btn-danger{background:#FFE5E5;color:var(--red)}
+.btn-secondary{background:#F2F2F7;color:var(--text)}
+.btn-close{width:100%;padding:14px;margin-top:8px;background:#F2F2F7;color:var(--text);border:none;border-radius:12px;font-size:15px;cursor:pointer;font-weight:600}
+
+/* Form */
+.form-section{padding:4px 0}
+.form-group{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.form-group label{font-size:13px;color:var(--text2);font-weight:500}
+.form-group input,.form-group select,.form-group textarea{padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;background:#fff;color:var(--text);outline:none;transition:border-color .15s;font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--purple)}
+.form-group textarea{resize:vertical;min-height:60px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.submit-btn{width:100%;background:var(--purple);color:#fff;border:none;border-radius:12px;padding:15px;font-size:16px;cursor:pointer;font-weight:600;margin-top:8px}
+.submit-btn:active{background:var(--purple-light)}
+
+/* Empty state */
+.empty{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-text{font-size:15px}
+
+/* Today highlight */
+.today-banner{background:linear-gradient(135deg,#FF9500,#FF6B00);color:#fff;border-radius:12px;padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.today-banner .count{font-size:28px;font-weight:700}
+.today-banner .label{font-size:14px;font-weight:500}
+
+/* Settings panel */
+.settings-list{background:#fff;border-radius:12px;border:1px solid var(--border);overflow:hidden}
+.settings-item{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:14px;color:var(--text)}
+.settings-item:last-child{border-bottom:none}
+.settings-item:active{background:#F8F8FA}
+.settings-item .arrow{color:var(--text2);font-size:16px}
+
+/* Toast */
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:500;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="header-row">
+      <div>
+        <h1>Party Rental Tracker</h1>
+        <div class="sub" id="header-sub">2026 Season</div>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" onclick="showTab('settings')" title="Settings">&#9881;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('rentals')">Rentals</div>
+    <div class="tab" onclick="showTab('summary')">Summary</div>
+    <div class="tab" onclick="showTab('add')">+ Add</div>
+  </div>
+
+  <!-- RENTALS TAB -->
+  <div class="content" id="tab-rentals">
+    <div id="today-section"></div>
+    <div class="search-bar">
+      <span>&#128269;</span>
+      <input type="text" placeholder="Search name, phone, item..." oninput="filterRentals(this.value)" id="search-input">
+    </div>
+    <div class="filter-row">
+      <div class="filter-chip active" onclick="setFilter('all')">All</div>
+      <div class="filter-chip" onclick="setFilter('Water Slide')">Water Slides</div>
+      <div class="filter-chip" onclick="setFilter('Jumping Balloon')">Balloons</div>
+      <div class="filter-chip" onclick="setFilter('Tables & Chairs')">Tables</div>
+      <div class="filter-chip" onclick="setFilter('cancelled')">Cancelled</div>
+    </div>
+    <div id="rental-list"></div>
+  </div>
+
+  <!-- SUMMARY TAB -->
+  <div class="content" id="tab-summary" style="display:none">
+    <div id="summary-content"></div>
+  </div>
+
+  <!-- ADD TAB -->
+  <div class="content" id="tab-add" style="display:none">
+    <div class="section-label" id="form-title">New Rental</div>
+    <div class="form-section">
+      <div class="form-group"><label>Date *</label><input type="date" id="f-date"></div>
+      <div class="form-group"><label>Customer Name *</label><input type="text" id="f-name" placeholder="Full name" autocomplete="off"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Phone</label><input type="tel" id="f-phone" placeholder="(915)000-0000"></div>
+        <div class="form-group"><label>ZIP</label><input type="text" id="f-zip" placeholder="79936" maxlength="5"></div>
+      </div>
+      <div class="form-group"><label>Address</label><input type="text" id="f-addr" placeholder="Street address"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Category *</label>
+          <select id="f-cat">
+            <option value="Water Slide">Water Slide</option>
+            <option value="Jumping Balloon">Jumping Balloon</option>
+            <option value="Tables & Chairs">Tables & Chairs</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Price ($)</label><input type="number" id="f-price" placeholder="130" inputmode="numeric"></div>
+      </div>
+      <div class="form-group"><label>Item / Package Name</label><input type="text" id="f-item" placeholder="e.g. Blue Wave, Fuego Paquete" autocomplete="off"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="f-status">
+          <option value="">Active</option>
+          <option value="CANCELADO">Cancelado</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Notes</label><textarea id="f-notes" placeholder="Optional notes"></textarea></div>
+      <input type="hidden" id="f-edit-id" value="">
+      <button class="submit-btn" onclick="saveRentalForm()" id="submit-btn">Save Rental</button>
+      <button class="btn btn-secondary" id="cancel-edit-btn" style="display:none;margin-top:8px" onclick="cancelEdit()">Cancel Edit</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="content" id="tab-settings" style="display:none">
+    <div class="section-label">Data Management</div>
+    <div class="settings-list">
+      <div class="settings-item" onclick="exportData()">
+        <span>Export Data (Backup)</span><span class="arrow">&#8250;</span>
+      </div>
+      <div class="settings-item" onclick="document.getElementById('import-file').click()">
+        <span>Import Data (Restore)</span><span class="arrow">&#8250;</span>
+      </div>
+      <div class="settings-item" onclick="exportCSV()">
+        <span>Export as CSV</span><span class="arrow">&#8250;</span>
+      </div>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    <div class="section-label" style="margin-top:24px">Danger Zone</div>
+    <div class="settings-list">
+      <div class="settings-item" onclick="resetData()" style="color:var(--red)">
+        <span>Reset All Data</span><span class="arrow">&#8250;</span>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--text2);font-size:12px;margin-top:24px">Party Rental Tracker v1.0<br>Data stored on this device</p>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-bg" id="modal" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div id="modal-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="editRental(currentModalId)">Edit</button>
+      <button class="btn btn-danger" onclick="deleteRental(currentModalId)">Delete</button>
+    </div>
+    <button class="btn-close" onclick="document.getElementById('modal').classList.remove('open')">Close</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'party_rentals_2026';
+let currentModalId = null;
+let currentFilter = 'all';
+let searchQuery = '';
+let editingId = null;
+
+const BASE_RENTALS = [
+  {id:1,  date:'2026-03-27', name:'Lily',                   phone:'',              addr:'\u2014',                        zip:'',      cat:'Tables & Chairs', item:'5 Sets Mesas y Sillas', price:60,   status:'', notes:'5 sets tables & chairs'},
+  {id:2,  date:'2026-03-28', name:'Sandy Estrada',          phone:'(915)433-1132', addr:'13961 Lorenz Ave',              zip:'',      cat:'Jumping Balloon', item:'Azul (Paquete)',         price:100,  status:'', notes:''},
+  {id:3,  date:'2026-03-28', name:'Angelo Timm',            phone:'(915)316-8492', addr:'309 Sun Vista Place',           zip:'79928', cat:'Water Slide',     item:'Palmeros',               price:130,  status:'', notes:''},
+  {id:4,  date:'2026-04-03', name:'Marlene Martell',        phone:'(915)920-5908', addr:'11400 Soto Ln, Socorro TX',     zip:'79927', cat:'Water Slide',     item:'Blue Wave',              price:130,  status:'', notes:''},
+  {id:5,  date:'2026-04-04', name:'Destiny Flores',         phone:'(915)215-0721', addr:'233 Lucero Ln',                 zip:'79907', cat:'Water Slide',     item:'Doble (Paquete)',        price:150,  status:'', notes:''},
+  {id:6,  date:'2026-04-04', name:'Bella Bella',            phone:'(915)305-2918', addr:'5745 Waldorf Dr',               zip:'79924', cat:'Water Slide',     item:'Sol',                    price:130,  status:'', notes:'Confirmed'},
+  {id:7,  date:'2026-04-04', name:'AJ Jaquez',              phone:'(915)305-8012', addr:'2109 Robert Wynn',              zip:'79936', cat:'Water Slide',     item:'Azul (Paquete)',         price:150,  status:'', notes:''},
+  {id:8,  date:'2026-04-04', name:'Ashley Navarro',         phone:'(915)803-4237', addr:'12328 Tierra Apache',           zip:'79938', cat:'Water Slide',     item:'Palmeras',               price:130,  status:'', notes:'Confirmed'},
+  {id:9,  date:'2026-04-04', name:'Jessica Garcia',         phone:'(915)312-7530', addr:'1756 Michael Smith',            zip:'79936', cat:'Jumping Balloon', item:'Rosa (Paquete)',          price:100,  status:'', notes:'Neighbor (Vecina)'},
+  {id:10, date:'2026-04-05', name:'Karina Castaneda',       phone:'(915)244-1932', addr:'13884 Paseo Sereno',            zip:'79928', cat:'Water Slide',     item:'Tropical Sun (Paquete)', price:150,  status:'CANCELADO', notes:''},
+  {id:11, date:'2026-04-05', name:'Kristian Vasquez',       phone:'(915)630-7486', addr:'6243 Tejas',                    zip:'79905', cat:'Water Slide',     item:'Palmas',                 price:130,  status:'', notes:''},
+  {id:12, date:'2026-04-05', name:'Kristy Ramirez',         phone:'(915)337-7393', addr:'400 Link',                      zip:'79907', cat:'Water Slide',     item:'Lago',                   price:130,  status:'', notes:''},
+  {id:13, date:'2026-04-05', name:'Edith Enriquez',         phone:'(915)251-5592', addr:'3914 Porter Ave',               zip:'79930', cat:'Water Slide',     item:'Otono (Paquete)',         price:null, status:'', notes:'Price crossed out; + Jumping Balloon Azul+Rosa $70'},
+  {id:14, date:'2026-04-05', name:'Miriam Olivas',          phone:'(915)706-3876', addr:'1817 Russ Randall',             zip:'79936', cat:'Water Slide',     item:'Fuego',                  price:130,  status:'', notes:''},
+  {id:15, date:'2026-04-05', name:'Alondra Salcedo Castro', phone:'(915)407-3080', addr:'2701 Gaston Dr',                zip:'79936', cat:'Water Slide',     item:'Blue Wave',              price:130,  status:'', notes:''},
+  {id:16, date:'2026-04-05', name:'Josie Sandoval',         phone:'(915)412-8577', addr:'4836 Northview',                zip:'79934', cat:'Jumping Balloon', item:'Azul',                   price:null, status:'', notes:'No price listed'},
+  {id:17, date:'2026-04-05', name:'Stephanie Medina',       phone:'(915)780-8394', addr:'13905 Flora Vista Ave',         zip:'79928', cat:'Water Slide',     item:'Tropical Sun',           price:130,  status:'', notes:''},
+  {id:18, date:'2026-04-05', name:'Julieta Wada',           phone:'(734)720-1597', addr:'1135 N Clark',                  zip:'79905', cat:'Water Slide',     item:'Palmeros',               price:130,  status:'CANCELADO', notes:''},
+  {id:19, date:'2026-04-05', name:'Rubi',                   phone:'(915)341-0694', addr:'3609 Tularosa Ave',             zip:'79903', cat:'Water Slide',     item:'Doble',                  price:150,  status:'', notes:''},
+  {id:20, date:'2026-04-05', name:'Paula Ortiz',            phone:'(915)920-6228', addr:'10125 Potomac',                 zip:'79924', cat:'Water Slide',     item:'Paquete Sol',            price:150,  status:'CANCELADO', notes:''},
+  {id:21, date:'2026-04-11', name:'Jocelyn Dominguez',      phone:'(480)738-6714', addr:'10077 Keystone Dr',             zip:'79924', cat:'Water Slide',     item:'Fuego (Paquete)',        price:150,  status:'', notes:''},
+];
+
+// ── Data ──
+function loadRentals(){
+  try{
+    const local = localStorage.getItem(STORAGE_KEY);
+    if(local) return JSON.parse(local);
+  }catch(e){}
+  return JSON.parse(JSON.stringify(BASE_RENTALS));
+}
+function saveRentals(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
+}
+let rentals = loadRentals();
+
+// ── Toast ──
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 2500);
+}
+
+// ── Tabs ──
+function showTab(tab){
+  ['rentals','summary','add','settings'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    t.classList.toggle('active', ['rentals','summary','add'][i]===tab);
+  });
+  if(tab==='summary') renderSummary();
+  if(tab==='rentals') renderRentals();
+  if(tab==='add' && !editingId){
+    document.getElementById('form-title').textContent='New Rental';
+    document.getElementById('submit-btn').textContent='Save Rental';
+    document.getElementById('cancel-edit-btn').style.display='none';
+  }
+}
+
+// ── Formatting ──
+function fmtDate(d){
+  const p=d.split('-');
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(p[1])-1]} ${parseInt(p[2])}, ${p[0]}`;
+}
+function fmtDateShort(d){
+  const p=d.split('-');
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(p[1])-1]} ${parseInt(p[2])}`;
+}
+function getDayName(d){
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return days[new Date(d+'T12:00:00').getDay()];
+}
+function isToday(d){
+  return d === new Date().toISOString().split('T')[0];
+}
+
+function catBadge(cat, status){
+  if(status==='CANCELADO') return '<span class="badge cancelled">Cancelado</span>';
+  if(cat==='Water Slide') return '<span class="badge waterslide">Water Slide</span>';
+  if(cat==='Jumping Balloon') return '<span class="badge balloon">Balloon</span>';
+  return '<span class="badge tables">Tables & Chairs</span>';
+}
+
+// ── Filters ──
+function setFilter(f){
+  currentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(chip=>{
+    const map = {'all':'All','Water Slide':'Water Slides','Jumping Balloon':'Balloons','Tables & Chairs':'Tables','cancelled':'Cancelled'};
+    chip.classList.toggle('active', chip.textContent === map[f]);
+  });
+  renderRentals();
+}
+
+function filterRentals(q){
+  searchQuery = q;
+  renderRentals();
+}
+
+// ── Render Rentals ──
+function renderRentals(){
+  const list = document.getElementById('rental-list');
+  const q = searchQuery.toLowerCase();
+
+  let filtered = rentals.filter(r=>{
+    if(q && !(r.name.toLowerCase().includes(q) || r.phone.includes(q) || r.item.toLowerCase().includes(q) || r.addr.toLowerCase().includes(q))) return false;
+    if(currentFilter === 'cancelled') return r.status === 'CANCELADO';
+    if(currentFilter !== 'all' && currentFilter !== 'cancelled'){
+      if(r.cat !== currentFilter) return false;
+      if(r.status === 'CANCELADO') return false;
+    }
+    return true;
+  });
+
+  // Today banner
+  const today = new Date().toISOString().split('T')[0];
+  const todayRentals = rentals.filter(r=> r.date === today && r.status !== 'CANCELADO');
+  const todaySection = document.getElementById('today-section');
+  if(todayRentals.length > 0 && !q && currentFilter === 'all'){
+    todaySection.innerHTML = `<div class="today-banner">
+      <div class="count">${todayRentals.length}</div>
+      <div><div class="label">Rental${todayRentals.length!==1?'s':''} Today</div>
+      <div style="font-size:12px;opacity:.85">${todayRentals.map(r=>r.name.split(' ')[0]).join(', ')}</div></div>
+    </div>`;
+  } else {
+    todaySection.innerHTML = '';
+  }
+
+  if(!filtered.length){
+    list.innerHTML = '<div class="empty"><div class="empty-icon">&#128270;</div><div class="empty-text">No rentals found</div></div>';
+    return;
+  }
+
+  const byDate = {};
+  filtered.forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
+  const sorted = Object.keys(byDate).sort();
+
+  let html = '';
+  sorted.forEach(date=>{
+    const dayName = getDayName(date);
+    const todayTag = isToday(date) ? ' \u2014 TODAY' : '';
+    html += `<div class="date-group">${dayName}, ${fmtDateShort(date)}${todayTag} (${byDate[date].length})</div>`;
+    byDate[date].forEach(r=>{
+      const price = r.price != null ? `$${r.price}` : '\u2014';
+      const confirmed = r.notes && r.notes.toLowerCase().includes('confirmed');
+      html += `<div class="card${r.status==='CANCELADO'?' cancelled':''}" onclick="openModal(${r.id})">
+        <div class="card-top">
+          <div class="card-name">${esc(r.name)}</div>
+          <div class="card-price${r.status==='CANCELADO'?' cancelled':''}">${price}</div>
+        </div>
+        <div class="card-meta">${esc(r.phone||'No phone')} &middot; ${esc(r.item)}</div>
+        <div class="card-badges">
+          ${catBadge(r.cat, r.status)}
+          ${confirmed && r.status!=='CANCELADO'?'<span class="badge confirmed">Confirmed</span>':''}
+        </div>
+      </div>`;
+    });
+  });
+  list.innerHTML = html;
+}
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+// ── Modal ──
+function openModal(id){
+  currentModalId = id;
+  const r = rentals.find(x=>x.id===id);
+  if(!r) return;
+  const price = r.price != null ? `$${r.price}` : '\u2014';
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-name">${esc(r.name)}</div>
+    <div style="margin-bottom:12px">${catBadge(r.cat, r.status)}</div>
+    <div class="modal-row"><span class="modal-label">Date</span><span class="modal-val">${getDayName(r.date)}, ${fmtDate(r.date)}</span></div>
+    <div class="modal-row"><span class="modal-label">Phone</span><span class="modal-val">${r.phone?`<a href="tel:${r.phone.replace(/[^\d+]/g,'')}" style="color:var(--blue);text-decoration:none">${esc(r.phone)}</a>`:'\u2014'}</span></div>
+    <div class="modal-row"><span class="modal-label">Address</span><span class="modal-val">${esc(r.addr)}${r.zip?' '+esc(r.zip):''}</span></div>
+    <div class="modal-row"><span class="modal-label">Item</span><span class="modal-val">${esc(r.item)}</span></div>
+    <div class="modal-row"><span class="modal-label">Price</span><span class="modal-val" style="color:var(--purple);font-size:18px;font-weight:700">${price}</span></div>
+    ${r.status?`<div class="modal-row"><span class="modal-label">Status</span><span class="modal-val" style="color:var(--red);font-weight:700">CANCELADO</span></div>`:''}
+    ${r.notes?`<div class="modal-row"><span class="modal-label">Notes</span><span class="modal-val">${esc(r.notes)}</span></div>`:''}
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(e){
+  if(e.target.id==='modal') document.getElementById('modal').classList.remove('open');
+}
+
+// ── Edit ──
+function editRental(id){
+  const r = rentals.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('modal').classList.remove('open');
+  editingId = id;
+  document.getElementById('f-date').value = r.date;
+  document.getElementById('f-name').value = r.name;
+  document.getElementById('f-phone').value = r.phone;
+  document.getElementById('f-zip').value = r.zip;
+  document.getElementById('f-addr').value = r.addr;
+  document.getElementById('f-cat').value = r.cat;
+  document.getElementById('f-price').value = r.price || '';
+  document.getElementById('f-item').value = r.item;
+  document.getElementById('f-status').value = r.status;
+  document.getElementById('f-notes').value = r.notes;
+  document.getElementById('f-edit-id').value = id;
+  document.getElementById('form-title').textContent = 'Edit Rental';
+  document.getElementById('submit-btn').textContent = 'Update Rental';
+  document.getElementById('cancel-edit-btn').style.display = 'block';
+  showTab('add');
+}
+
+function cancelEdit(){
+  editingId = null;
+  clearForm();
+  document.getElementById('form-title').textContent = 'New Rental';
+  document.getElementById('submit-btn').textContent = 'Save Rental';
+  document.getElementById('cancel-edit-btn').style.display = 'none';
+  showTab('rentals');
+}
+
+// ── Delete ──
+function deleteRental(id){
+  if(!confirm('Delete this rental? This cannot be undone.')) return;
+  rentals = rentals.filter(r=>r.id !== id);
+  saveRentals();
+  document.getElementById('modal').classList.remove('open');
+  renderRentals();
+  toast('Rental deleted');
+}
+
+// ── Save Form ──
+function saveRentalForm(){
+  const name = document.getElementById('f-name').value.trim();
+  const date = document.getElementById('f-date').value;
+  if(!name || !date){ toast('Please enter a name and date'); return; }
+
+  const data = {
+    date,
+    name,
+    phone: document.getElementById('f-phone').value.trim(),
+    addr:  document.getElementById('f-addr').value.trim() || '\u2014',
+    zip:   document.getElementById('f-zip').value.trim(),
+    cat:   document.getElementById('f-cat').value,
+    item:  document.getElementById('f-item').value.trim(),
+    price: document.getElementById('f-price').value ? parseFloat(document.getElementById('f-price').value) : null,
+    status:document.getElementById('f-status').value,
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+
+  const eid = document.getElementById('f-edit-id').value;
+  if(eid){
+    const idx = rentals.findIndex(r=>r.id === parseInt(eid));
+    if(idx > -1){
+      rentals[idx] = {...rentals[idx], ...data};
+      toast(`Updated ${name}`);
+    }
+  } else {
+    const newId = Math.max(...rentals.map(r=>r.id), 0) + 1;
+    rentals.push({id: newId, ...data});
+    toast(`Saved rental for ${name}`);
+  }
+
+  saveRentals();
+  clearForm();
+  editingId = null;
+  document.getElementById('f-edit-id').value = '';
+  document.getElementById('form-title').textContent = 'New Rental';
+  document.getElementById('submit-btn').textContent = 'Save Rental';
+  document.getElementById('cancel-edit-btn').style.display = 'none';
+  showTab('rentals');
+}
+
+function clearForm(){
+  ['f-name','f-phone','f-addr','f-zip','f-item','f-price','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-status').value='';
+  document.getElementById('f-date').value='';
+  document.getElementById('f-edit-id').value='';
+}
+
+// ── Summary ──
+function renderSummary(){
+  const active = rentals.filter(r=>r.status!=='CANCELADO');
+  const cancelled = rentals.filter(r=>r.status==='CANCELADO');
+  const total = active.reduce((s,r)=>s+(r.price||0),0);
+  const ws = active.filter(r=>r.cat==='Water Slide');
+  const jb = active.filter(r=>r.cat==='Jumping Balloon');
+  const tc = active.filter(r=>r.cat==='Tables & Chairs');
+
+  const byDate = {};
+  active.forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
+
+  let rows = Object.keys(byDate).sort().map(date=>{
+    const recs = byDate[date];
+    const dt = recs.reduce((s,r)=>s+(r.price||0),0);
+    return `<div class="card">
+      <div class="card-top"><div class="card-name">${getDayName(date)}, ${fmtDateShort(date)}</div><div class="card-price">$${dt}</div></div>
+      <div class="card-meta">${recs.length} rental${recs.length!==1?'s':''} &middot; ${recs.map(r=>r.name.split(' ')[0]).join(', ')}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('summary-content').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Total Revenue</div><div class="stat-val money">$${total.toLocaleString()}</div></div>
+      <div class="stat"><div class="stat-label">Active Rentals</div><div class="stat-val">${active.length}</div></div>
+      <div class="stat"><div class="stat-label">Cancelled</div><div class="stat-val" style="color:var(--red)">${cancelled.length}</div></div>
+      <div class="stat"><div class="stat-label">Avg per Rental</div><div class="stat-val money">$${active.length?Math.round(total/active.length):0}</div></div>
+    </div>
+    <div class="section-label">By Category</div>
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Water Slides</div><div class="stat-val">${ws.length} <span style="font-size:14px;color:var(--purple)">($${ws.reduce((s,r)=>s+(r.price||0),0)})</span></div></div>
+      <div class="stat"><div class="stat-label">Balloons</div><div class="stat-val">${jb.length} <span style="font-size:14px;color:var(--purple)">($${jb.reduce((s,r)=>s+(r.price||0),0)})</span></div></div>
+      <div class="stat"><div class="stat-label">Tables & Chairs</div><div class="stat-val">${tc.length} <span style="font-size:14px;color:var(--purple)">($${tc.reduce((s,r)=>s+(r.price||0),0)})</span></div></div>
+      <div class="stat"><div class="stat-label">Unique Dates</div><div class="stat-val">${Object.keys(byDate).length}</div></div>
+    </div>
+    <div class="section-label">Revenue by Date</div>
+    ${rows}
+  `;
+}
+
+// ── Data Management ──
+function exportData(){
+  const blob = new Blob([JSON.stringify(rentals, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rentals_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Backup downloaded');
+}
+
+function importData(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!Array.isArray(data)){ toast('Invalid file format'); return; }
+      if(!confirm(`Import ${data.length} rentals? This will replace current data.`)) return;
+      rentals = data;
+      saveRentals();
+      renderRentals();
+      toast(`Imported ${data.length} rentals`);
+    }catch(err){ toast('Error reading file'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function exportCSV(){
+  const headers = ['Date','Name','Phone','Address','ZIP','Category','Item','Price','Status','Notes'];
+  const rows = rentals.map(r=>[r.date,r.name,r.phone,r.addr,r.zip,r.cat,r.item,r.price||'',r.status,r.notes].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rentals_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded');
+}
+
+function resetData(){
+  if(!confirm('Reset ALL data back to original? You will lose any changes.')) return;
+  if(!confirm('Are you sure? This cannot be undone.')) return;
+  rentals = JSON.parse(JSON.stringify(BASE_RENTALS));
+  saveRentals();
+  renderRentals();
+  toast('Data reset to original');
+  showTab('rentals');
+}
+
+// ── Init ──
+renderRentals();
+
+// Set today's date as default for new rentals
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>
