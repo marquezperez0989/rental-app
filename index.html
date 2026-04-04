@@ -152,6 +152,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .confirm-btns{display:flex;gap:10px}
 .confirm-btns .btn{flex:1;padding:13px;font-size:15px}
 
+/* Blocklist */
+.block-card{background:#fff;border:1.5px solid #FFD4D4;border-radius:14px;padding:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.block-card .block-info{flex:1}
+.block-card .block-name{font-size:15px;font-weight:600;color:var(--text)}
+.block-card .block-addr{font-size:13px;color:var(--text2);margin-top:2px}
+.block-card .block-reason{font-size:12px;color:var(--red);margin-top:4px;font-weight:500}
+.block-delete{background:#FFE5E5;border:none;color:var(--red);width:36px;height:36px;border-radius:10px;font-size:18px;cursor:pointer;flex-shrink:0;margin-left:10px;display:flex;align-items:center;justify-content:center}
+.block-delete:active{background:#FFCECE}
+.block-form{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+.block-form .form-group{margin-bottom:10px}
+.block-form .form-group:last-of-type{margin-bottom:0}
+.block-add-btn{width:100%;background:var(--red);color:#fff;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;margin-top:12px}
+.block-add-btn:active{background:#E02020}
+.block-warning{background:#FFF5F5;border:1.5px solid #FFD4D4;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;font-size:13px;color:#C62828;font-weight:600}
+
 /* Toast */
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:500;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none}
 .toast.show{opacity:1}
@@ -176,6 +191,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div class="tab active" onclick="showTab('rentals')">Rentas</div>
     <div class="tab" onclick="showTab('summary')">Resumen</div>
     <div class="tab" onclick="showTab('add')">+ Agregar</div>
+    <div class="tab" onclick="showTab('blocklist')" style="color:var(--red)">&#9940; Lista</div>
   </div>
 
   <!-- RENTALS TAB -->
@@ -239,6 +255,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
   </div>
 
+  <!-- BLOCKLIST TAB -->
+  <div class="content" id="tab-blocklist" style="display:none">
+    <div class="section-label">Agregar a la Lista</div>
+    <div class="block-form">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="bl-name" placeholder="Nombre de la persona" autocomplete="off"></div>
+      <div class="form-group"><label>Direccion</label><input type="text" id="bl-addr" placeholder="Direccion" autocomplete="off"></div>
+      <div class="form-group"><label>Telefono</label><input type="tel" id="bl-phone" placeholder="(915)000-0000"></div>
+      <div class="form-group"><label>Razon</label><input type="text" id="bl-reason" placeholder="ej. No pago, danio equipo..." autocomplete="off"></div>
+      <button class="block-add-btn" onclick="addToBlocklist()">Agregar a No Rentar</button>
+    </div>
+    <div class="section-label">No Rentar A:</div>
+    <div id="blocklist-items"></div>
+  </div>
+
   <!-- SETTINGS TAB -->
   <div class="content" id="tab-settings" style="display:none">
     <div class="section-label">Datos</div>
@@ -295,6 +325,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <script>
 const STORAGE_KEY = 'party_rentals_2026';
+const BLOCKLIST_KEY = 'party_blocklist_2026';
 let currentModalId = null;
 let currentFilter = 'all';
 let searchQuery = '';
@@ -353,14 +384,15 @@ function toast(msg){
 
 // ── Tabs ──
 function showTab(tab){
-  ['rentals','summary','add','settings'].forEach(t=>{
+  ['rentals','summary','add','blocklist','settings'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
   });
   document.querySelectorAll('.tab').forEach((t,i)=>{
-    t.classList.toggle('active', ['rentals','summary','add'][i]===tab);
+    t.classList.toggle('active', ['rentals','summary','add','blocklist'][i]===tab);
   });
   if(tab==='summary') renderSummary();
   if(tab==='rentals') renderRentals();
+  if(tab==='blocklist') renderBlocklist();
   if(tab==='add' && !editingId){
     document.getElementById('form-title').textContent='Nueva Renta';
     document.getElementById('submit-btn').textContent='Guardar Renta';
@@ -638,7 +670,28 @@ function saveRentalForm(){
     notes: document.getElementById('f-notes').value.trim(),
   };
 
+  // Check blocklist for new rentals
   const eid = document.getElementById('f-edit-id').value;
+  if(!eid && isBlocked(data.name, data.addr)){
+    showConfirm(
+      'Persona en Lista de No Rentar',
+      `${data.name} o su direccion esta en la lista de no rentar. Quieres continuar de todos modos?`,
+      function(){
+        const newId = Math.max(...rentals.map(r=>r.id), 0) + 1;
+        rentals.push({id: newId, ...data});
+        toast(`Renta guardada para ${data.name} (en lista negra)`);
+        saveRentals(); clearForm(); editingId=null;
+        document.getElementById('f-edit-id').value='';
+        document.getElementById('form-title').textContent='Nueva Renta';
+        document.getElementById('submit-btn').textContent='Guardar Renta';
+        document.getElementById('cancel-edit-btn').style.display='none';
+        showTab('rentals');
+      },
+      'Si, Rentar'
+    );
+    return;
+  }
+
   if(eid){
     const idx = rentals.findIndex(r=>r.id === parseInt(eid));
     if(idx > -1){
@@ -720,7 +773,8 @@ function renderSummary(){
 
 // ── Data Management ──
 function exportData(){
-  const blob = new Blob([JSON.stringify(rentals, null, 2)], {type:'application/json'});
+  const backup = { rentals, blocklist };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -737,12 +791,18 @@ function importData(event){
   reader.onload = function(e){
     try{
       const data = JSON.parse(e.target.result);
-      if(!Array.isArray(data)){ toast('Formato invalido'); return; }
-      if(!confirm(`Importar ${data.length} rentas? Esto reemplazara los datos actuales.`)) return;
-      rentals = data;
-      saveRentals();
-      renderRentals();
-      toast(`${data.length} rentas importadas`);
+      // Support both old format (array) and new format (object with blocklist)
+      if(Array.isArray(data)){
+        showConfirm('Importar','Importar '+data.length+' rentas? Esto reemplazara los datos actuales.',function(){
+          rentals=data; saveRentals(); renderRentals(); toast(data.length+' rentas importadas');
+        },'Si, Importar');
+      } else if(data.rentals){
+        showConfirm('Importar','Importar '+data.rentals.length+' rentas? Esto reemplazara los datos actuales.',function(){
+          rentals=data.rentals; saveRentals();
+          if(data.blocklist){ blocklist=data.blocklist; saveBlocklist(); }
+          renderRentals(); toast(data.rentals.length+' rentas importadas');
+        },'Si, Importar');
+      } else { toast('Formato invalido'); return; }
     }catch(err){ toast('Error al leer archivo'); }
   };
   reader.readAsText(file);
@@ -776,6 +836,85 @@ function resetData(){
     },
     'Si, Borrar Todo'
   );
+}
+
+// ── Blocklist ──
+function loadBlocklist(){
+  try{
+    const local = localStorage.getItem(BLOCKLIST_KEY);
+    if(local) return JSON.parse(local);
+  }catch(e){}
+  return [];
+}
+function saveBlocklist(){
+  try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
+}
+let blocklist = loadBlocklist();
+
+function addToBlocklist(){
+  const name = document.getElementById('bl-name').value.trim();
+  if(!name){ toast('Ingresa un nombre'); return; }
+  const entry = {
+    id: Date.now(),
+    name,
+    addr: document.getElementById('bl-addr').value.trim(),
+    phone: document.getElementById('bl-phone').value.trim(),
+    reason: document.getElementById('bl-reason').value.trim(),
+    date: new Date().toISOString().split('T')[0]
+  };
+  blocklist.push(entry);
+  saveBlocklist();
+  document.getElementById('bl-name').value='';
+  document.getElementById('bl-addr').value='';
+  document.getElementById('bl-phone').value='';
+  document.getElementById('bl-reason').value='';
+  renderBlocklist();
+  toast(`${name} agregado a la lista`);
+}
+
+function removeFromBlocklist(id){
+  const entry = blocklist.find(b=>b.id===id);
+  if(!entry) return;
+  showConfirm(
+    'Quitar de la Lista',
+    `Quitar a ${entry.name} de la lista de no rentar?`,
+    function(){
+      blocklist = blocklist.filter(b=>b.id!==id);
+      saveBlocklist();
+      renderBlocklist();
+      toast(`${entry.name} quitado de la lista`);
+    },
+    'Si, Quitar'
+  );
+}
+
+function renderBlocklist(){
+  const container = document.getElementById('blocklist-items');
+  if(!blocklist.length){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">&#9989;</div><div class="empty-text">La lista esta vacia</div></div>';
+    return;
+  }
+  container.innerHTML = blocklist.map(b=>`
+    <div class="block-card">
+      <div class="block-info">
+        <div class="block-name">${esc(b.name)}</div>
+        ${b.addr?`<div class="block-addr">${esc(b.addr)}</div>`:''}
+        ${b.phone?`<div class="block-addr">${esc(b.phone)}</div>`:''}
+        ${b.reason?`<div class="block-reason">${esc(b.reason)}</div>`:''}
+      </div>
+      <button class="block-delete" onclick="removeFromBlocklist(${b.id})">&times;</button>
+    </div>
+  `).join('');
+}
+
+function isBlocked(name, addr){
+  const n = name.toLowerCase();
+  const a = addr.toLowerCase();
+  return blocklist.some(b=>{
+    if(b.name && n.includes(b.name.toLowerCase())) return true;
+    if(b.addr && a.includes(b.addr.toLowerCase())) return true;
+    return false;
+  });
 }
 
 // ── Init ──
