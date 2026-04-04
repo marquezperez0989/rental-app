@@ -143,6 +143,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .settings-item:active{background:#F8F8FA}
 .settings-item .arrow{color:var(--text2);font-size:16px}
 
+/* Confirm dialog */
+.confirm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.confirm-bg.open{display:flex}
+.confirm-box{background:#fff;border-radius:16px;padding:24px 20px;width:90%;max-width:320px;text-align:center;animation:slideUp .2s ease}
+.confirm-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}
+.confirm-msg{font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.4}
+.confirm-btns{display:flex;gap:10px}
+.confirm-btns .btn{flex:1;padding:13px;font-size:15px}
+
 /* Toast */
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:500;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none}
 .toast.show{opacity:1}
@@ -266,6 +275,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <button class="btn btn-danger" onclick="deleteRental(currentModalId)">Eliminar</button>
     </div>
     <button class="btn-close" onclick="document.getElementById('modal').classList.remove('open')">Cerrar</button>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-bg" id="confirm-dialog" onclick="closeConfirm()">
+  <div class="confirm-box" onclick="event.stopPropagation()">
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-msg" id="confirm-msg"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Cancelar</button>
+      <button class="btn btn-danger" id="confirm-yes" onclick="">Eliminar</button>
+    </div>
   </div>
 </div>
 
@@ -567,14 +588,35 @@ function cancelEdit(){
   showTab('rentals');
 }
 
+// ── Confirm Dialog ──
+function showConfirm(title, msg, onYes, btnText){
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent = msg;
+  const yesBtn = document.getElementById('confirm-yes');
+  yesBtn.textContent = btnText || 'Eliminar';
+  yesBtn.onclick = function(){ closeConfirm(); onYes(); };
+  document.getElementById('confirm-dialog').classList.add('open');
+}
+function closeConfirm(){
+  document.getElementById('confirm-dialog').classList.remove('open');
+}
+
 // ── Delete ──
 function deleteRental(id){
-  if(!confirm('Eliminar esta renta? No se puede deshacer.')) return;
-  rentals = rentals.filter(r=>r.id !== id);
-  saveRentals();
-  document.getElementById('modal').classList.remove('open');
-  renderRentals();
-  toast('Renta eliminada');
+  const r = rentals.find(x=>x.id===id);
+  if(!r) return;
+  showConfirm(
+    'Eliminar Renta',
+    `Seguro que quieres eliminar la renta de ${r.name}? No se puede deshacer.`,
+    function(){
+      rentals = rentals.filter(x=>x.id !== id);
+      saveRentals();
+      document.getElementById('modal').classList.remove('open');
+      renderRentals();
+      toast('Renta eliminada');
+    },
+    'Si, Eliminar'
+  );
 }
 
 // ── Save Form ──
@@ -722,13 +764,18 @@ function exportCSV(){
 }
 
 function resetData(){
-  if(!confirm('Borrar TODOS los datos y volver al original? Perderas todos los cambios.')) return;
-  if(!confirm('Estas seguro? No se puede deshacer.')) return;
-  rentals = JSON.parse(JSON.stringify(BASE_RENTALS));
-  saveRentals();
-  renderRentals();
-  toast('Datos restaurados');
-  showTab('rentals');
+  showConfirm(
+    'Borrar Todo',
+    'Borrar TODOS los datos y volver al original? Perderas todos los cambios. No se puede deshacer.',
+    function(){
+      rentals = JSON.parse(JSON.stringify(BASE_RENTALS));
+      saveRentals();
+      renderRentals();
+      toast('Datos restaurados');
+      showTab('rentals');
+    },
+    'Si, Borrar Todo'
+  );
 }
 
 // ── Init ──
