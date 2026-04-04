@@ -3,13 +3,18 @@
   "short_name": "Rentas",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#F5F5F7",
-  "theme_color": "#4B0082",
+  "background_color": "#2D2B55",
+  "theme_color": "#2D2B55",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎪</text></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }

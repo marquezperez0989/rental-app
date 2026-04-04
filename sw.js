@@ -1,6 +1,6 @@
 // Service Worker - Party Rental Tracker
 // Change CACHE_VERSION every time you push an update to bust the cache
-const CACHE_VERSION = 'v3.0';
+const CACHE_VERSION = 'v4.0';
 const CACHE_NAME = 'rental-app-' + CACHE_VERSION;
 
 // Install: cache the app files
