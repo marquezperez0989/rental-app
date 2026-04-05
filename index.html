@@ -448,13 +448,15 @@ async function _doCloudSave(){
       ts: Date.now(),
       device: navigator.userAgent.slice(0,50)
     };
+    // Use text/plain to avoid CORS preflight (Safari blocks OPTIONS on jsonblob)
     const resp = await fetch(CLOUD_URL, {
       method: 'PUT',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type':'text/plain'},
       body: JSON.stringify(payload)
     });
     if(resp.ok){
       localStorage.setItem('last_cloud_sync', new Date().toISOString());
+      updateCloudStatus();
     }
   }catch(e){
     console.log('Cloud save failed:', e);
@@ -466,7 +468,8 @@ async function cloudLoad(){
   try{
     const resp = await fetch(CLOUD_URL + '?t=' + Date.now());
     if(!resp.ok) return null;
-    const data = await resp.json();
+    const text = await resp.text();
+    const data = JSON.parse(text);
     if(data && data.rentals && data.ts) return data;
   }catch(e){
     console.log('Cloud load failed:', e);
@@ -479,39 +482,22 @@ async function syncFromCloud(){
   const cloud = await cloudLoad();
   if(!cloud || !cloud.ts) return;
 
-  const localRentals = loadRentals();
-  const localBlocklist = loadBlocklist();
-
-  // If local storage is empty/default but cloud has real data, use cloud
-  const localIsDefault = (localRentals.length === BASE_RENTALS.length &&
-    localRentals.every((r,i) => r.id === BASE_RENTALS[i].id && r.status === BASE_RENTALS[i].status));
-  const cloudHasData = cloud.rentals.length > 0;
-
-  if(localIsDefault && cloudHasData && cloud.rentals.length !== BASE_RENTALS.length){
-    // Cloud has different data than defaults - use cloud
-    rentals = cloud.rentals;
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
-    if(cloud.blocklist){
-      blocklist = cloud.blocklist;
-      try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
-    }
-    renderRentals();
-    toast('Datos restaurados de la nube');
-    return;
-  }
-
-  // If cloud timestamp is newer than our last sync, and local looks like defaults
+  // Compare: use cloud data if cloud timestamp is newer than last local sync
   const lastSync = localStorage.getItem('last_cloud_sync');
-  if(!lastSync && cloudHasData && cloud.ts > 0){
-    // First time on this device/fresh install - prefer cloud
+  const lastSyncTs = lastSync ? new Date(lastSync).getTime() : 0;
+
+  if(cloud.ts > lastSyncTs){
+    // Cloud is newer - use it
     rentals = cloud.rentals;
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
     if(cloud.blocklist){
       blocklist = cloud.blocklist;
       try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
     }
+    localStorage.setItem('last_cloud_sync', new Date(cloud.ts).toISOString());
     renderRentals();
-    toast('Datos restaurados de la nube');
+    toast('Datos sincronizados');
+    updateCloudStatus();
   }
 }
 let rentals = loadRentals();
@@ -1068,7 +1054,7 @@ function isBlocked(name, addr){
 }
 
 // ── Version & Auto-Update ──
-const APP_VERSION = '5.0';
+const APP_VERSION = '5.1';
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(reg=>{
@@ -1165,6 +1151,7 @@ document.getElementById('f-date').value = new Date().toISOString().split('T')[0]
 
 // Pull cloud data on startup (restores data after re-adding home screen app)
 syncFromCloud();
+updateCloudStatus();
 
 // Auto-backup to cloud every 2 minutes while app is open
 setInterval(()=> _doCloudSave(), 2*60*1000);
