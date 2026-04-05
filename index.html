@@ -334,7 +334,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
         <span>Borrar Todos los Datos</span><span class="arrow">&#8250;</span>
       </div>
     </div>
-    <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:24px;letter-spacing:.02em">Rentas de Fiesta v4.0<br>Datos guardados en este dispositivo</p>
+    <div class="section-label" style="margin-top:24px">Nube</div>
+    <div class="settings-list">
+      <div class="settings-item" onclick="forceCloudSave()">
+        <span>Guardar a la Nube Ahora</span><span class="arrow">&#8250;</span>
+      </div>
+      <div class="settings-item" onclick="forceCloudRestore()">
+        <span>Restaurar de la Nube</span><span class="arrow">&#8250;</span>
+      </div>
+    </div>
+    <div id="cloud-status" style="text-align:center;color:var(--text3);font-size:11px;margin-top:12px;letter-spacing:.02em"></div>
+    <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:16px;letter-spacing:.02em">Rentas de Fiesta v5.0<br>Sincronizado con la nube</p>
   </div>
 </div>
 
@@ -370,6 +380,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 <script>
 const STORAGE_KEY = 'party_rentals_2026';
 const BLOCKLIST_KEY = 'party_blocklist_2026';
+const CLOUD_URL = 'https://jsonblob.com/api/jsonBlob/019d5fcd-3962-7030-99ff-12579409e2e9';
+let cloudSyncing = false;
 let currentModalId = null;
 let currentFilter = 'all';
 let searchQuery = '';
@@ -416,6 +428,91 @@ function loadRentals(){
 }
 function saveRentals(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
+  cloudSave(); // auto-sync to cloud on every change
+}
+
+// ── Cloud Sync ──
+let _cloudTimer = null;
+function cloudSave(){
+  // Debounce: wait 1s after last change before syncing
+  clearTimeout(_cloudTimer);
+  _cloudTimer = setTimeout(_doCloudSave, 1000);
+}
+async function _doCloudSave(){
+  if(cloudSyncing) return;
+  cloudSyncing = true;
+  try{
+    const payload = {
+      rentals: rentals,
+      blocklist: blocklist,
+      ts: Date.now(),
+      device: navigator.userAgent.slice(0,50)
+    };
+    const resp = await fetch(CLOUD_URL, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(resp.ok){
+      localStorage.setItem('last_cloud_sync', new Date().toISOString());
+    }
+  }catch(e){
+    console.log('Cloud save failed:', e);
+  }
+  cloudSyncing = false;
+}
+
+async function cloudLoad(){
+  try{
+    const resp = await fetch(CLOUD_URL + '?t=' + Date.now());
+    if(!resp.ok) return null;
+    const data = await resp.json();
+    if(data && data.rentals && data.ts) return data;
+  }catch(e){
+    console.log('Cloud load failed:', e);
+  }
+  return null;
+}
+
+// On app start: pull from cloud if it has newer data
+async function syncFromCloud(){
+  const cloud = await cloudLoad();
+  if(!cloud || !cloud.ts) return;
+
+  const localRentals = loadRentals();
+  const localBlocklist = loadBlocklist();
+
+  // If local storage is empty/default but cloud has real data, use cloud
+  const localIsDefault = (localRentals.length === BASE_RENTALS.length &&
+    localRentals.every((r,i) => r.id === BASE_RENTALS[i].id && r.status === BASE_RENTALS[i].status));
+  const cloudHasData = cloud.rentals.length > 0;
+
+  if(localIsDefault && cloudHasData && cloud.rentals.length !== BASE_RENTALS.length){
+    // Cloud has different data than defaults - use cloud
+    rentals = cloud.rentals;
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
+    if(cloud.blocklist){
+      blocklist = cloud.blocklist;
+      try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
+    }
+    renderRentals();
+    toast('Datos restaurados de la nube');
+    return;
+  }
+
+  // If cloud timestamp is newer than our last sync, and local looks like defaults
+  const lastSync = localStorage.getItem('last_cloud_sync');
+  if(!lastSync && cloudHasData && cloud.ts > 0){
+    // First time on this device/fresh install - prefer cloud
+    rentals = cloud.rentals;
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
+    if(cloud.blocklist){
+      blocklist = cloud.blocklist;
+      try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
+    }
+    renderRentals();
+    toast('Datos restaurados de la nube');
+  }
 }
 let rentals = loadRentals();
 
@@ -900,6 +997,7 @@ function loadBlocklist(){
 }
 function saveBlocklist(){
   try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
+  cloudSave(); // auto-sync to cloud on every change
 }
 let blocklist = loadBlocklist();
 
@@ -970,7 +1068,7 @@ function isBlocked(name, addr){
 }
 
 // ── Version & Auto-Update ──
-const APP_VERSION = '4.0';
+const APP_VERSION = '5.0';
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(reg=>{
@@ -1011,6 +1109,49 @@ if('serviceWorker' in navigator){
   }catch(e){}
 })();
 
+// ── Manual Cloud Controls ──
+async function forceCloudSave(){
+  toast('Guardando...');
+  await _doCloudSave();
+  const lastSync = localStorage.getItem('last_cloud_sync');
+  toast('Guardado en la nube');
+  updateCloudStatus();
+}
+async function forceCloudRestore(){
+  showConfirm(
+    'Restaurar de la Nube',
+    'Esto reemplazara todos los datos locales con los de la nube. Continuar?',
+    async function(){
+      toast('Restaurando...');
+      const cloud = await cloudLoad();
+      if(cloud && cloud.rentals){
+        rentals = cloud.rentals;
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
+        if(cloud.blocklist){
+          blocklist = cloud.blocklist;
+          try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
+        }
+        renderRentals();
+        toast('Datos restaurados de la nube');
+      } else {
+        toast('No se encontraron datos en la nube');
+      }
+    },
+    'Si, Restaurar'
+  );
+}
+function updateCloudStatus(){
+  const el = document.getElementById('cloud-status');
+  if(!el) return;
+  const lastSync = localStorage.getItem('last_cloud_sync');
+  if(lastSync){
+    const d = new Date(lastSync);
+    el.textContent = 'Ultima sincronizacion: ' + d.toLocaleString('es-MX');
+  } else {
+    el.textContent = 'Sin sincronizacion reciente';
+  }
+}
+
 // ── Splash Screen ──
 setTimeout(()=>{
   const splash = document.getElementById('splash');
@@ -1021,6 +1162,21 @@ setTimeout(()=>{
 // ── Init ──
 renderRentals();
 document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+
+// Pull cloud data on startup (restores data after re-adding home screen app)
+syncFromCloud();
+
+// Auto-backup to cloud every 2 minutes while app is open
+setInterval(()=> _doCloudSave(), 2*60*1000);
+
+// Also sync when app comes back to foreground (user switches back to app)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible'){
+    syncFromCloud();
+  } else {
+    _doCloudSave(); // save when leaving app
+  }
+});
 </script>
 </body>
 </html>
