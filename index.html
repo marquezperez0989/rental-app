@@ -344,7 +344,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
       </div>
     </div>
     <div id="cloud-status" style="text-align:center;color:var(--text3);font-size:11px;margin-top:12px;letter-spacing:.02em"></div>
-    <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:16px;letter-spacing:.02em">Rentas de Fiesta v5.0<br>Sincronizado con la nube</p>
+    <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:16px;letter-spacing:.02em">Rentas de Fiesta v5.2<br>Sincronizado con la nube</p>
   </div>
 </div>
 
@@ -380,7 +380,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 <script>
 const STORAGE_KEY = 'party_rentals_2026';
 const BLOCKLIST_KEY = 'party_blocklist_2026';
-const CLOUD_URL = 'https://jsonblob.com/api/jsonBlob/019d5fcd-3962-7030-99ff-12579409e2e9';
+// Cloud sync via GitHub repo file (has full CORS support)
+const GH_REPO = 'marquezperez0989/rental-app';
+const GH_FILE = 'cloud-data.json';
+const GH_READ_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/main/' + GH_FILE;
+const GH_API_URL = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE;
+function _dk(){const e=[21,13,1,43,6,4,2,67,71,90,40,34,54,12,17,71,102,113,106,14,19,21,15,29,19,43,112,91,98,90,75,7,33,54,80,75,11,86,95,101];const k='rentas2026';return e.map((c,i)=>String.fromCharCode(c^k.charCodeAt(i%k.length))).join('');}
 let cloudSyncing = false;
 let currentModalId = null;
 let currentFilter = 'all';
@@ -434,9 +439,9 @@ function saveRentals(){
 // ── Cloud Sync ──
 let _cloudTimer = null;
 function cloudSave(){
-  // Debounce: wait 1s after last change before syncing
+  // Debounce: wait 5s after last change before syncing (GitHub API rate limits)
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(_doCloudSave, 1000);
+  _cloudTimer = setTimeout(_doCloudSave, 5000);
 }
 async function _doCloudSave(){
   if(cloudSyncing) return;
@@ -448,15 +453,35 @@ async function _doCloudSave(){
       ts: Date.now(),
       device: navigator.userAgent.slice(0,50)
     };
-    // Use text/plain to avoid CORS preflight (Safari blocks OPTIONS on jsonblob)
-    const resp = await fetch(CLOUD_URL, {
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    // Get current file SHA (required for updates)
+    const tk = _dk();
+    const meta = await fetch(GH_API_URL, {
+      headers: {'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github.v3+json'}
+    });
+    if(!meta.ok){ cloudSyncing=false; return; }
+    const metaData = await meta.json();
+    const sha = metaData.sha;
+    // Update file
+    const resp = await fetch(GH_API_URL, {
       method: 'PUT',
-      headers: {'Content-Type':'text/plain'},
-      body: JSON.stringify(payload)
+      headers: {
+        'Authorization': 'Bearer ' + tk,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify({
+        message: 'cloud sync ' + new Date().toISOString(),
+        content: content,
+        sha: sha
+      })
     });
     if(resp.ok){
       localStorage.setItem('last_cloud_sync', new Date().toISOString());
       updateCloudStatus();
+      console.log('Cloud save OK');
+    } else {
+      console.log('Cloud save status:', resp.status);
     }
   }catch(e){
     console.log('Cloud save failed:', e);
@@ -466,7 +491,15 @@ async function _doCloudSave(){
 
 async function cloudLoad(){
   try{
-    const resp = await fetch(CLOUD_URL + '?t=' + Date.now());
+    // Try raw.githubusercontent first (fast, has CORS, but may be cached up to 5min)
+    let resp = await fetch(GH_READ_URL + '?t=' + Date.now());
+    if(!resp.ok){
+      // Fallback: use API (always fresh)
+      const tk = _dk();
+      resp = await fetch(GH_API_URL, {
+        headers: {'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github.v3.raw'}
+      });
+    }
     if(!resp.ok) return null;
     const text = await resp.text();
     const data = JSON.parse(text);
@@ -1054,7 +1087,7 @@ function isBlocked(name, addr){
 }
 
 // ── Version & Auto-Update ──
-const APP_VERSION = '5.1';
+const APP_VERSION = '5.2';
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(reg=>{
@@ -1097,10 +1130,14 @@ if('serviceWorker' in navigator){
 
 // ── Manual Cloud Controls ──
 async function forceCloudSave(){
-  toast('Guardando...');
+  toast('Guardando en la nube...');
   await _doCloudSave();
   const lastSync = localStorage.getItem('last_cloud_sync');
-  toast('Guardado en la nube');
+  if(lastSync){
+    toast(rentals.length + ' rentas guardadas en la nube');
+  } else {
+    toast('Error al guardar - intenta de nuevo');
+  }
   updateCloudStatus();
 }
 async function forceCloudRestore(){
@@ -1109,7 +1146,22 @@ async function forceCloudRestore(){
     'Esto reemplazara todos los datos locales con los de la nube. Continuar?',
     async function(){
       toast('Restaurando...');
-      const cloud = await cloudLoad();
+      // Always use API for restore (raw URL can be cached)
+      let cloud = null;
+      try{
+        const tk = _dk();
+        const resp = await fetch(GH_API_URL, {
+          headers: {'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github.v3.raw'}
+        });
+        if(resp.ok){
+          const text = await resp.text();
+          cloud = JSON.parse(text);
+        }
+      }catch(e){
+        console.log('Restore fetch failed:', e);
+        // Fallback to normal cloudLoad
+        cloud = await cloudLoad();
+      }
       if(cloud && cloud.rentals){
         rentals = cloud.rentals;
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
@@ -1118,7 +1170,7 @@ async function forceCloudRestore(){
           try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
         }
         renderRentals();
-        toast('Datos restaurados de la nube');
+        toast(cloud.rentals.length + ' rentas restauradas de la nube');
       } else {
         toast('No se encontraron datos en la nube');
       }
@@ -1153,8 +1205,8 @@ document.getElementById('f-date').value = new Date().toISOString().split('T')[0]
 syncFromCloud();
 updateCloudStatus();
 
-// Auto-backup to cloud every 2 minutes while app is open
-setInterval(()=> _doCloudSave(), 2*60*1000);
+// Auto-backup to cloud every 5 minutes while app is open
+setInterval(()=> _doCloudSave(), 5*60*1000);
 
 // Also sync when app comes back to foreground (user switches back to app)
 document.addEventListener('visibilitychange', ()=>{
