@@ -344,7 +344,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
       </div>
     </div>
     <div id="cloud-status" style="text-align:center;color:var(--text3);font-size:11px;margin-top:12px;letter-spacing:.02em"></div>
-    <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:16px;letter-spacing:.02em">Rentas de Fiesta v5.2<br>Sincronizado con la nube</p>
+    <p style="text-align:center;color:var(--text3);font-size:11px;margin-top:16px;letter-spacing:.02em">Rentas de Fiesta v5.3<br>Sincronizado con la nube</p>
   </div>
 </div>
 
@@ -380,11 +380,10 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 <script>
 const STORAGE_KEY = 'party_rentals_2026';
 const BLOCKLIST_KEY = 'party_blocklist_2026';
-// Cloud sync via GitHub repo file (has full CORS support)
-const GH_REPO = 'marquezperez0989/rental-app';
-const GH_FILE = 'cloud-data.json';
-const GH_READ_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/main/' + GH_FILE;
-const GH_API_URL = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE;
+// Cloud sync via GitHub Gist (NO commits, NO deployments, just data)
+const GIST_ID = 'f51fc72ce56eddbc3ab50453a270f730';
+const GIST_READ_URL = 'https://gist.githubusercontent.com/marquezperez0989/' + GIST_ID + '/raw/cloud-data.json';
+const GIST_API_URL = 'https://api.github.com/gists/' + GIST_ID;
 function _dk(){const e=[21,13,1,43,6,4,2,67,71,90,40,34,54,12,17,71,102,113,106,14,19,21,15,29,19,43,112,91,98,90,75,7,33,54,80,75,11,86,95,101];const k='rentas2026';return e.map((c,i)=>String.fromCharCode(c^k.charCodeAt(i%k.length))).join('');}
 let cloudSyncing = false;
 let currentModalId = null;
@@ -453,27 +452,16 @@ async function _doCloudSave(){
       ts: Date.now(),
       device: navigator.userAgent.slice(0,50)
     };
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-    // Get current file SHA (required for updates)
     const tk = _dk();
-    const meta = await fetch(GH_API_URL, {
-      headers: {'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github.v3+json'}
-    });
-    if(!meta.ok){ cloudSyncing=false; return; }
-    const metaData = await meta.json();
-    const sha = metaData.sha;
-    // Update file
-    const resp = await fetch(GH_API_URL, {
-      method: 'PUT',
+    // Gist PATCH — simple, no SHA needed, no commits, no deployments
+    const resp = await fetch(GIST_API_URL, {
+      method: 'PATCH',
       headers: {
         'Authorization': 'Bearer ' + tk,
-        'Content-Type': 'application/json',
-        'Accept': 'application/vnd.github.v3+json'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        message: 'cloud sync ' + new Date().toISOString(),
-        content: content,
-        sha: sha
+        files: { 'cloud-data.json': { content: JSON.stringify(payload) } }
       })
     });
     if(resp.ok){
@@ -491,18 +479,16 @@ async function _doCloudSave(){
 
 async function cloudLoad(){
   try{
-    // Try raw.githubusercontent first (fast, has CORS, but may be cached up to 5min)
-    let resp = await fetch(GH_READ_URL + '?t=' + Date.now());
-    if(!resp.ok){
-      // Fallback: use API (always fresh)
-      const tk = _dk();
-      resp = await fetch(GH_API_URL, {
-        headers: {'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github.v3.raw'}
-      });
-    }
+    // Use Gist API for always-fresh data (no caching issues)
+    const tk = _dk();
+    const resp = await fetch(GIST_API_URL, {
+      headers: {'Authorization': 'Bearer ' + tk}
+    });
     if(!resp.ok) return null;
-    const text = await resp.text();
-    const data = JSON.parse(text);
+    const gist = await resp.json();
+    const file = gist.files && gist.files['cloud-data.json'];
+    if(!file || !file.content) return null;
+    const data = JSON.parse(file.content);
     if(data && data.rentals && data.ts) return data;
   }catch(e){
     console.log('Cloud load failed:', e);
@@ -1087,7 +1073,7 @@ function isBlocked(name, addr){
 }
 
 // ── Version & Auto-Update ──
-const APP_VERSION = '5.2';
+const APP_VERSION = '5.3';
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(reg=>{
@@ -1146,22 +1132,7 @@ async function forceCloudRestore(){
     'Esto reemplazara todos los datos locales con los de la nube. Continuar?',
     async function(){
       toast('Restaurando...');
-      // Always use API for restore (raw URL can be cached)
-      let cloud = null;
-      try{
-        const tk = _dk();
-        const resp = await fetch(GH_API_URL, {
-          headers: {'Authorization': 'Bearer ' + tk, 'Accept': 'application/vnd.github.v3.raw'}
-        });
-        if(resp.ok){
-          const text = await resp.text();
-          cloud = JSON.parse(text);
-        }
-      }catch(e){
-        console.log('Restore fetch failed:', e);
-        // Fallback to normal cloudLoad
-        cloud = await cloudLoad();
-      }
+      const cloud = await cloudLoad();
       if(cloud && cloud.rentals){
         rentals = cloud.rentals;
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rentals)); }catch(e){}
@@ -1169,7 +1140,9 @@ async function forceCloudRestore(){
           blocklist = cloud.blocklist;
           try{ localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist)); }catch(e){}
         }
+        localStorage.setItem('last_cloud_sync', new Date().toISOString());
         renderRentals();
+        updateCloudStatus();
         toast(cloud.rentals.length + ' rentas restauradas de la nube');
       } else {
         toast('No se encontraron datos en la nube');

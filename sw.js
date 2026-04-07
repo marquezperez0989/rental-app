@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v5.2';
+const CACHE_VERSION = 'v5.3';
 const CACHE_NAME = 'rental-app-' + CACHE_VERSION;
 
 self.addEventListener('install', event => {
